@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>俄语解析</title>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+    <style>
+        :root { 
+            --paper-bg: #f9f7f1; --line-color: #e0e0e0; --blue-ink: #1a3b8e; 
+            --red-ink: #c92a2a; --text-color: #333333; --card-bg: #fff8e1; 
+            --card-border: #ffe082; --details-bg: rgba(255,255,255,0.8); 
+            --btn-bg: var(--blue-ink); --modal-bg: #ffffff; --input-bg: rgba(255,255,255,0.6);
+        }
+        body { font-family: 'Microsoft YaHei', sans-serif; background-color: #2c3e50; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; transition: background-color 0.3s; }
+        
+        .top-bar { width: 100%; max-width: 600px; display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;}
+        .top-bar-left { display: flex; flex-direction: column; gap: 5px; }
+        .title-row { display: flex; align-items: center; gap: 8px; color: white; font-size: 20px; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.3); letter-spacing: 1px;}
+        
+        .api-tutorial-link { color: #f1c40f; font-size: 13px; cursor: pointer; text-decoration: underline; text-shadow: 0 1px 2px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 4px; transition: 0.2s; width: fit-content;}
+        .api-tutorial-link:hover { color: #fff; transform: translateX(2px); }
+        
+        .top-bar-right { display: flex; gap: 15px; }
+        .setting-btn { background: transparent; border: none; color: white; font-size: 24px; cursor: pointer; transition: 0.2s; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .setting-btn:hover { transform: scale(1.1) rotate(10deg); }
+        
+        .api-alert { display: none; width: 100%; max-width: 600px; background: #ffecb3; color: #b7791f; padding: 15px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; font-weight: bold; border-left: 5px solid #f6ad55; box-shadow: 0 4px 6px rgba(0,0,0,0.1); line-height: 1.5; }
+        .api-alert.danger { background: #fed7d7; color: #c53030; border-left-color: #f56565; }
+        
+        .notebook { background-color: var(--paper-bg); width: 100%; max-width: 600px; padding: 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background-image: repeating-linear-gradient(transparent, transparent 29px, var(--line-color) 30px); background-size: 100% 30px; line-height: 30px; margin-bottom: 50px; position: relative; transition: all 0.3s ease; }
+        h1 { text-align: center; color: var(--blue-ink); font-size: 24px; margin-bottom: 20px; border-bottom: 2px solid var(--red-ink); padding-bottom: 10px; }
+        
+        .input-area { margin-bottom: 20px; position: relative; }
+        textarea { width: 100%; height: 150px; font-size: 18px; font-family: 'Times New Roman', 'Microsoft YaHei', serif; border: 2px solid var(--blue-ink); border-radius: 6px; padding: 15px; box-sizing: border-box; resize: vertical; background: var(--input-bg); outline: none; color: var(--blue-ink); line-height: 1.5; padding-top: 40px; transition: background 0.3s;}
+        
+        .textarea-tools { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none;}
+        .tool-btn { pointer-events: auto; background: rgba(255,255,255,0.8); border: 1px solid var(--line-color); border-radius: 4px; padding: 4px 10px; font-size: 13px; color: var(--text-color); cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .tool-btn:hover { background: var(--blue-ink); color: white; border-color: var(--blue-ink); }
+        .tool-btn.clear { border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; }
+        
+        .image-preview-box { display: none; margin-bottom: 20px; text-align: center; position: relative; background: rgba(0,0,0,0.05); border-radius: 8px; padding: 10px; border: 1px dashed var(--blue-ink);}
+        .image-preview-box img { max-width: 100%; max-height: 150px; border-radius: 4px; }
+        .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: #4CAF50; box-shadow: 0 0 10px #4CAF50; display: none; animation: scan 2s linear infinite; }
+        @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+        .ocr-status { font-size: 14px; color: var(--blue-ink); font-weight: bold; margin-top: 10px; }
+
+        button.btn-action { width: 100%; margin-top: 10px; padding: 15px; background-color: var(--btn-bg); color: white; border: none; border-radius: 6px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; white-space: nowrap; }
+        button.btn-action:hover { opacity: 0.85; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        button.btn-action:disabled { background-color: #999; cursor: wait; transform: none; box-shadow: none;}
+        
+        .result-box { margin-top: 30px; padding-top: 10px; border-top: 2px dashed var(--line-color); }
+        .sentence-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 20px; margin-bottom: 25px; transition: all 0.3s; }
+        .sentence-header { font-size: 16px; color: var(--text-color); opacity: 0.7; font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 10px; }
+        
+        .pair-item { margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px dashed var(--card-border); }
+        .pair-item:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
+        .pair-ru-row { display: flex; align-items: flex-start; gap: 10px; }
+        .pair-ru { font-size: 18px; font-weight: bold; color: var(--blue-ink); font-family: 'Times New Roman', serif; line-height: 1.5; flex: 1; word-break: break-word; }
+        
+        .pair-speak-btn { background-color: #4CAF50; color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); white-space: nowrap; }
+        .pair-speak-btn:hover { background-color: #388E3C; transform: scale(1.1); }
+        .pair-speak-btn:disabled { background-color: #999; transform: none; }
+
+        .pair-zh { font-size: 16px; color: var(--text-color); margin-top: 8px; font-weight: bold; line-height: 1.5; padding-left: 5px; word-break: break-word; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;}
+        .copy-btn { background: transparent; border: none; cursor: pointer; font-size: 16px; opacity: 0.5; transition: 0.2s; padding: 0;}
+        .copy-btn:hover { opacity: 1; transform: scale(1.1); }
+
+        .sentence-actions { margin-top: 20px; text-align: right; border-top: 1px dashed var(--card-border); padding-top: 15px; display: flex; justify-content: flex-end;}
+        .action-btn { padding: 10px 20px; border-radius: 20px; border: none; cursor: pointer; font-size: 14px; background: var(--btn-bg); color: white; transition: 0.2s; font-weight: bold; white-space: nowrap;}
+
+        details { background: var(--details-bg); border-left: 4px solid var(--blue-ink); border-radius: 4px; margin-bottom: 12px; padding: 10px 15px; transition: all 0.3s ease; }
+        summary { font-size: 22px; color: var(--blue-ink); font-weight: bold; font-family: 'Times New Roman', serif; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; outline: none; }
+        summary::-webkit-details-marker { display: none; }
+        summary::after { content: "▼"; font-size: 12px; color: var(--text-color); opacity: 0.5; transition: transform 0.3s ease; }
+        details[open] { background: rgba(255,255,255,0.95); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        details[open] summary::after { transform: rotate(180deg); }
+        
+        .details-content { margin-top: 15px; border-top: 1px dashed var(--line-color); padding-top: 10px; animation: slideDown 0.3s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .speak-btn { font-size: 14px; padding: 6px 15px; border-radius: 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; white-space: nowrap; }
+        .translation { font-size: 18px; color: var(--text-color); margin-top: 10px; font-weight: bold; }
+        .phonetic { color: var(--red-ink); font-size: 22px; margin-top: 5px; letter-spacing: 2px; font-weight: bold; }
+        .details-text { margin-top: 10px; font-size: 15px; color: var(--text-color); background: rgba(0,0,0,0.03); padding: 10px; border-radius: 4px; }
+        .highlight-red { color: var(--red-ink); font-weight: bold; }
+        .highlight-blue { color: var(--blue-ink); font-weight: bold; }
+        
+        .loading-dots::after { content: '...'; animation: dots 1.5s infinite; color: var(--text-color); opacity: 0.5;}
+        @keyframes dots { 0%, 20% { content: ''; } 40% { content: '.'; } 60% { content: '..' } 80%, 100% { content: '...' } }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+        .modal-content { background: var(--modal-bg); width: 90%; max-width: 420px; border-radius: 12px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); color: var(--text-color); transition: background 0.3s; }
+        .modal-content h3 { margin-top: 0; color: var(--blue-ink); border-bottom: 2px solid var(--line-color); padding-bottom: 10px; }
+        .modal-btn { width: 100%; padding: 12px; background: var(--btn-bg); color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.2s; }
+        .modal-btn:hover { opacity: 0.85; }
+        .modal-btn.secondary { background: transparent; color: var(--text-color); border: 1px solid var(--line-color); margin-top: 10px; }
+        .modal-btn.secondary:hover { background: rgba(0,0,0,0.05); }
+        
+        .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .theme-card { border: 2px solid #ddd; border-radius: 8px; padding: 10px; cursor: pointer; text-align: center; transition: 0.2s; font-size: 14px; font-weight: bold; }
+        .theme-card:hover { transform: translateY(-3px); box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .theme-card.active { border-color: var(--blue-ink); box-shadow: 0 0 0 2px var(--blue-ink); }
+        .theme-preview { height: 50px; border-radius: 4px; margin-bottom: 10px; border: 1px solid rgba(0,0,0,0.1); }
+        .custom-color-area { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #ccc; }
+        .color-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        input[type="color"] { width: 40px; height: 30px; padding: 0; border: none; border-radius: 4px; cursor: pointer; }
+        
+        .radio-label { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 16px; color: var(--text-color); padding: 10px; border-radius: 6px; border: 1px solid var(--line-color); transition: 0.2s; margin-bottom: 8px; }
+        .radio-label:hover { background: rgba(0,0,0,0.05); }
+
+        .custom-api-area { display: none; margin-top: 10px; padding: 15px; background: rgba(0,0,0,0.03); border-radius: 6px; border: 1px dashed var(--line-color); }
+        .custom-api-area input { width: 100%; margin-bottom: 10px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px; box-sizing: border-box; }
+        .custom-api-area label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; font-weight: bold;}
+        
+        .tutorial-body { font-size: 14px; line-height: 1.6; max-height: 65vh; overflow-y: auto; padding-right: 5px;}
+        .tutorial-step { margin-bottom: 15px; padding-left: 10px; border-left: 3px solid var(--blue-ink); }
+        .tutorial-step h4 { margin: 0 0 5px 0; color: var(--blue-ink); }
+        .tutorial-code { background: #2c3e50; color: #ecf0f1; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; margin: 5px 0; word-break: break-all; }
+        
+        .welcome-body { font-size: 14px; line-height: 1.6; max-height: 60vh; overflow-y: auto; padding-right: 5px;}
+        .welcome-body::-webkit-scrollbar, .tutorial-body::-webkit-scrollbar { width: 6px; }
+        .welcome-body::-webkit-scrollbar-thumb, .tutorial-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        .welcome-section { margin-bottom: 12px; background: rgba(0,0,0,0.03); padding: 12px; border-radius: 6px; border-left: 4px solid var(--blue-ink); }
+        .welcome-section h4 { margin: 0 0 8px 0; color: var(--blue-ink); font-size: 15px; display: flex; align-items: center; gap: 5px;}
+        .welcome-list { margin: 0; padding-left: 18px; }
+        .welcome-list li { margin-bottom: 6px; }
+        .welcome-section p { margin: 0; }
+        .highlight-text { color: var(--red-ink); font-weight: bold; }
+        .edge-recommend { border-left-color: #0078D7; background: rgba(0, 120, 215, 0.05); }
+        .edge-recommend h4 { color: #0078D7; }
+        
+        .author-page { font-size: 15px; line-height: 1.8; color: var(--text-color); }
+        .author-page p { margin-bottom: 12px; text-indent: 2em; }
+        .author-page .signature { text-align: right; margin-top: 20px; font-weight: bold; color: var(--blue-ink); }
+
+        #cropModal { z-index: 1100; }
+        .crop-modal-content { background: #fff; width: 95%; max-width: 800px; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .crop-container { width: 100%; height: 60vh; background: #333; border-radius: 8px; overflow: hidden; display: flex; justify-content: center; align-items: center; margin-bottom: 15px;}
+        .crop-container img { max-width: 100%; max-height: 100%; display: block; }
+        .crop-actions { display: flex; gap: 15px; width: 100%; justify-content: flex-end;}
+        .crop-btn { padding: 10px 25px; border-radius: 6px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .crop-btn.cancel { background: #eee; color: #333; }
+        .crop-btn.confirm { background: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+
+    <audio id="audioPlayer" style="display: none;"></audio>
+    <input type="file" id="imageInput" accept="image/*" style="display: none;">
+
+    <div class="top-bar">
+        <div class="top-bar-left">
+            <div class="title-row">
+                <button class="setting-btn" onclick="openWelcomeModal()" title="查看使用须知" style="font-size: 18px;">❓</button>
+                俄语解析
+            </div>
+            <div class="api-tutorial-link" onclick="openTutorialModal()">
+                💡 如果你想用自己的API教程
+            </div>
+        </div>
+        <div class="top-bar-right">
+            <button class="setting-btn" onclick="openThemeSettings()" title="主题美化">🎨</button>
+            <button class="setting-btn" onclick="openAPISettings()" title="API 接口设置">⚙️</button>
+        </div>
+    </div>
+
+    <div id="apiAlert" class="api-alert"></div>
+
+    <div class="notebook">
+        <h1>俄语解析</h1>
+        
+        <div class="input-area">
+            <div class="textarea-tools">
+                <button class="tool-btn" onclick="showOCRWarning()">🖼️ 照片解析</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="tool-btn" onclick="fillExample()">示例</button>
+                    <button class="tool-btn clear" onclick="clearInput()">×</button>
+                </div>
+            </div>
+            <textarea id="russianInput" placeholder="在此粘贴中文或俄语段落，或点击左上角选择相册照片..."></textarea>
+        </div>
+
+        <div class="image-preview-box" id="imagePreviewBox">
+            <div class="scan-line" id="scanLine"></div>
+            <img id="imagePreview" src="" alt="预览">
+            <div class="ocr-status" id="ocrStatus">准备识别...</div>
+        </div>
+
+        <button class="btn-action" id="analyzeBtn" onclick="startAnalysis()">开始解析</button>
+
+        <div class="result-box" id="resultBox"></div>
+    </div>
+
+    <!-- 照片解析预告 -->
+    <div class="modal-overlay" id="ocrWarningModal">
+        <div class="modal-content">
+            <h3>📷 照片解析须知</h3>
+            <div class="welcome-body" style="max-height: none; margin-bottom: 15px;">
+                <p>纯本地照片解析需要下载字库并计算，<strong>大约需要花费 2-3 分钟</strong>（视设备性能而定），期间请勿关闭页面。</p>
+                <p style="margin-top: 10px; color: #b7791f;">💡 快捷推荐：如果您的手机相册自带“提取文字”功能，或者您有其他 AI 工具（如微信提取文字、豆包等），可以直接把提取出来的俄语文字粘贴到下方的文本框中，速度会快得多！</p>
+            </div>
+            <button class="modal-btn" onclick="startLocalOCR()">继续本地解析（需等待）</button>
+            <button class="modal-btn secondary" onclick="document.getElementById('ocrWarningModal').style.display='none'">我知道了，去手动粘贴</button>
+        </div>
+    </div>
+
+    <!-- 裁剪弹窗 -->
+    <div class="modal-overlay" id="cropModal">
+        <div class="crop-modal-content">
+            <div class="crop-container">
+                <img id="imageToCrop" src="" alt="待裁剪图片">
+            </div>
+            <div class="crop-actions">
+                <button class="crop-btn cancel" onclick="cancelCrop()">取消</button>
+                <button class="crop-btn confirm" onclick="confirmCropAndOCR()">✂️ 确认裁剪并识别</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API 教程弹窗 -->
+    <div class="modal-overlay" id="tutorialModal">
+        <div class="modal-content">
+            <h3>💡 自定义 API 配置教程</h3>
+            <div class="tutorial-body">
+                <p><strong>为什么推荐自己配？</strong><br>免费公共接口经常拥堵卡顿，如果你填入自己的大模型 API（如 DeepSeek、智谱），不仅<strong>速度秒回</strong>、<strong>翻译极度精准</strong>，还能解决照片识别的错字问题，且费用极低（几块钱能用半年）！</p>
+                
+                <div class="tutorial-step">
+                    <h4>第一步：获取 API Key</h4>
+                    <p>推荐去 <strong>DeepSeek 开放平台</strong> (platform.deepseek.com) 或 <strong>智谱AI</strong> (open.bigmodel.cn) 注册账号。进入控制台，找到“API Keys”，点击创建并复制你的密钥（以 sk- 开头的字符串）。</p>
+                </div>
+
+                <div class="tutorial-step">
+                    <h4>第二步：填写配置</h4>
+                    <p>点击本页面右上角的 <strong>⚙️ 齿轮</strong> 图标，勾选最下方的“✨ 自定义大模型 API”，然后填入：</p>
+                    <p>1. <strong>接口地址</strong>（以 DeepSeek 为例）：</p>
+                    <div class="tutorial-code">https://api.deepseek.com/v1/chat/completions</div>
+                    <p>2. <strong>API Key</strong>：粘贴你刚才复制的 sk- 开头的密钥。</p>
+                    <p>3. <strong>模型名称</strong>：<br>
+                    如果只用来翻译文本，填 <code>deepseek-chat</code>；<br>
+                    如果<strong>想用来拍照提取文字</strong>，必须填支持视觉的模型，比如智谱的 <code>glm-4v</code> 或 通义的 <code>qwen-vl-plus</code>。</p>
+                </div>
+
+                <div class="tutorial-step">
+                    <h4>第三步：保存并使用</h4>
+                    <p>点击“保存设置”。现在你点照片解析，会直接调用云端极速识别！</p>
+                </div>
+                
+                <p style="font-size: 12px; color: #888; margin-top: 10px;">注：如果你在网页直接双击打开 (file:// 协议)，浏览器可能会拦截大模型请求（跨域）。建议部署到 GitHub Pages 或本地服务器运行。</p>
+            </div>
+            <button class="modal-btn" onclick="document.getElementById('tutorialModal').style.display='none'">我知道了</button>
+        </div>
+    </div>
+
+    <!-- 开屏弹窗 (包含3页) -->
+    <div class="modal-overlay" id="welcomeModal" style="display: flex;">
+        <div class="modal-content">
+            <!-- 第一页：作者的话 -->
+            <div id="welcomePage1">
+                <h3>💬 作者的话</h3>
+                <div class="welcome-body author-page">
+                    <p>这个图片解析功能，我真的尽力了，驯服 AI 大失败 😭。</p>
+                    <p>照片提取确实还有些瑕疵，因为我不太会搞这块。我知道搭载大厂的 API 可以完美解决，但那玩意儿是要花钱的。</p>
+                    <p>咱们主要就是为了发音和查词，花那冤枉钱没太必要。</p>
+                    <p>所以，咱们还是免费的白嫖着用，主打一个不烧心～</p>
+                    <p><strong>最靠谱、最完美的内容体验，依然是把你要查的俄语文本直接添加进下方的文本框中！</strong></p>
+                    <p>如果上课要用的话，还是豆包更好使，这个只是为了发音。</p>
+                    <p>我是因为百度和豆包实在查不到发音，所以搞得这个。</p>
+                    <p style="color:var(--red-ink); font-weight:bold; margin-top:10px;">💡 如果你想追求极致的翻译准确率，点击左上角的“💡 如果你想用自己的API教程”查看配置方法。</p>
+                    <div class="signature">—— 作者（苦逼大学生一枚）</div>
+                </div>
+                <button class="modal-btn" onclick="nextWelcomePage(1)">下一页：费用说明</button>
+            </div>
+            
+            <!-- 第二页：费用说明 -->
+            <div id="welcomePage2" style="display: none;">
+                <h3>💰 成本核算</h3>
+                <div class="welcome-body">
+                    <div class="welcome-section">
+                        <h4>📊 按 API 计费标准计算</h4>
+                        <p>根据官方计费标准，如果是用联网搜索接口（Search/Fetch），<strong>5元/1000次</strong>：</p>
+                        <ul class="welcome-list">
+                            <li>运行 1 次花费：<strong>0.005 元</strong>（半厘钱）。</li>
+                            <li>运行 <strong>200 次</strong> 大约花费 <strong>1 块钱</strong>。</li>
+                        </ul>
+                    </div>
+                    <div class="welcome-section" style="border-left-color: #2ecc71;">
+                        <h4>🎉 实际更便宜！</h4>
+                        <p>咱们做翻译使用的是<strong>大语言模型（按 Token 计费）</strong>，比这还便宜得多！1 块钱能翻译几十万字，足够你点上万次“开始解析”。</p>
+                    </div>
+                </div>
+                <button class="modal-btn" onclick="nextWelcomePage(2)">下一页：使用须知</button>
+                <button class="modal-btn secondary" onclick="prevWelcomePage(1)">返回上一页</button>
+            </div>
+
+            <!-- 第三页：详细使用须知 -->
+            <div id="welcomePage3" style="display: none;">
+                <h3>👋 详细使用须知</h3>
+                <div class="welcome-body">
+                    <div class="welcome-section edge-recommend">
+                        <h4>🌐 一、 最佳浏览器推荐</h4>
+                        <p><strong>强烈建议您使用微软 Edge 浏览器！</strong><br>
+                        Edge 内置了微软神经网络语音，发音音质最高且对音频接口的跨域限制最少。<br>
+                        <span style="font-size: 13px; color: #888; display: inline-block; margin-top: 4px;">💡 若在微信内打开可能没声音，请点击右上角选择“在浏览器中打开”。</span></p>
+                    </div>
+                    <div class="welcome-section">
+                        <h4>🔊 二、 翻译与发音机制</h4>
+                        <ul class="welcome-list">
+                            <li><strong>全自动模式：</strong> 翻译会在后台同时请求多个免费通道，谁先返回用谁。若全挂，点右上角 ⚙️ 换通道。</li>
+                            <li><strong>无需语音包：</strong> 发音使用的是网络直连，无需在手机系统里下载俄语包。如果没声，请检查网络。</li>
+                        </ul>
+                    </div>
+                    <div class="welcome-section">
+                        <h4>🖼️ 三、 照片解析功能</h4>
+                        <ul class="welcome-list">
+                            <li><strong>耗时较长：</strong> 纯浏览器本地识别约需 <b>2-3 分钟</b>，首次需下载字库。</li>
+                            <li><strong>更优替代方案：</strong> 直接用手机自带的相册“提取文字”，或发给“豆包”提取，然后把俄文粘贴到上方文本框。这比本地解析准得多也快得多！</li>
+                        </ul>
+                    </div>
+                    <p style="text-align: center; color: var(--blue-ink); font-weight: bold; margin-top: 15px;">
+                        如果以后忘了怎么操作，随时点击左上角的 ❓ 即可重新阅读本说明。
+                    </p>
+                </div>
+                <button class="modal-btn" onclick="closeWelcomeModal()">我知道了，开始使用</button>
+                <button class="modal-btn secondary" onclick="prevWelcomePage(2)">返回上一页</button>
+            </div>
+        </div>
+    </div> 
+
+    <!-- 主题弹窗 -->
+    <div class="modal-overlay" id="themeModal">
+        <div class="modal-content">
+            <h3>🎨 主题美化</h3>
+            <div class="theme-grid">
+                <div class="theme-card" data-theme="classic" onclick="applyTheme('classic')"><div class="theme-preview" style="background: #f9f7f1; border-left: 4px solid #1a3b8e;"></div>经典笔记</div>
+                <div class="theme-card" data-theme="dark" onclick="applyTheme('dark')"><div class="theme-preview" style="background: #1a1a1a; border-left: 4px solid #f5c211;"></div>暗夜黑金</div>
+                <div class="theme-card" data-theme="forest" onclick="applyTheme('forest')"><div class="theme-preview" style="background: #f0f5f1; border-left: 4px solid #1b5e20;"></div>护眼森林</div>
+                <div class="theme-card" data-theme="cyber" onclick="applyTheme('cyber')"><div class="theme-preview" style="background: #0f172a; border-left: 4px solid #38bdf8;"></div>赛博极客</div>
+            </div>
+            <div class="custom-color-area">
+                <div class="color-row"><span>自定义背景：</span><input type="color" id="customBg" onchange="applyCustomColor()"></div>
+                <div class="color-row"><span>自定义主色：</span><input type="color" id="customInk" onchange="applyCustomColor()"></div>
+            </div>
+            <button class="modal-btn" onclick="document.getElementById('themeModal').style.display='none'">关闭</button>
+        </div>
+    </div>
+
+    <!-- API 接口设置弹窗 -->
+    <div class="modal-overlay" id="apiModal">
+        <div class="modal-content">
+            <h3>⚙️ 翻译接口设置</h3>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="apiSelect" value="auto" onchange="toggleCustomApiUI()"> <b>全自动模式 (推荐)</b></label>
+                <label class="radio-label"><input type="radio" name="apiSelect" value="google" onchange="toggleCustomApiUI()"> <b>Google</b> (通常最快)</label>
+                <label class="radio-label"><input type="radio" name="apiSelect" value="lingva" onchange="toggleCustomApiUI()"> <b>Lingva</b> (开源备选)</label>
+                <label class="radio-label"><input type="radio" name="apiSelect" value="mymemory" onchange="toggleCustomApiUI()"> <b>MyMemory</b> (稳定兜底)</label>
+                <label class="radio-label" style="border-color: var(--blue-ink);"><input type="radio" name="apiSelect" value="custom" onchange="toggleCustomApiUI()"> <b>✨ 自定义大模型 API</b></label>
+            </div>
+            
+            <div class="custom-api-area" id="customApiArea">
+                <label>API 接口地址 (URL)</label>
+                <input type="text" id="customApiUrl" placeholder="如: https://api.deepseek.com/v1/chat/completions">
+                <label>API Key</label>
+                <input type="password" id="customApiKey" placeholder="sk-xxxxxxxxxxxx">
+                <label>模型名称 (Model)</label>
+                <input type="text" id="customApiModel" placeholder="如: deepseek-chat, glm-4v">
+                <div style="font-size:12px; color:#c92a2a; margin-top:5px; font-weight:bold;">⚠️ 注意：DeepSeek 只支持文本翻译。照片提取文字必须填视觉模型（如 glm-4v）。</div>
+            </div>
+
+            <button class="modal-btn" onclick="saveAPISettings()">保存设置</button>
+        </div>
+    </div>
+
+    <script>
+        // 0. 开屏多页切换逻辑
+        function nextWelcomePage(currentPage) {
+            document.getElementById('welcomePage1').style.display = 'none';
+            document.getElementById('welcomePage2').style.display = 'none';
+            document.getElementById('welcomePage3').style.display = 'none';
+            document.getElementById('welcomePage' + (currentPage + 1)).style.display = 'block';
+        }
+        function prevWelcomePage(currentPage) {
+            document.getElementById('welcomePage1').style.display = 'none';
+            document.getElementById('welcomePage2').style.display = 'none';
+            document.getElementById('welcomePage3').style.display = 'none';
+            document.getElementById('welcomePage' + (currentPage - 1)).style.display = 'block';
+        }
+        
+        function openWelcomeModal() { 
+            document.getElementById('welcomePage1').style.display = 'block'; 
+            document.getElementById('welcomePage2').style.display = 'none'; 
+            document.getElementById('welcomePage3').style.display = 'none'; 
+            document.getElementById('welcomeModal').style.display = 'flex'; 
+        }
+        function closeWelcomeModal() { document.getElementById('welcomeModal').style.display = 'none'; }
+        function openTutorialModal() { document.getElementById('tutorialModal').style.display = 'flex'; }
+
+        // 1. 照片识别预告
+        function showOCRWarning() { 
+            if (currentAPI === 'custom' && customApiKey && customApiUrl) {
+                if (customApiUrl.includes('deepseek') || customApiModel.includes('deepseek')) {
+                    alert("⚠️ 你当前填的是 DeepSeek 模型（纯文本）。\n\nDeepSeek 无法看懂图片！\n如果你想用 AI 识别图片，请去右上角换成智谱的视觉模型（glm-4v）。\n\n现在将为你降级使用本地慢速识别。");
+                    document.getElementById('imageInput').click();
+                } else {
+                    document.getElementById('imageInput').click(); 
+                }
+            } else {
+                document.getElementById('ocrWarningModal').style.display = 'flex'; 
+            }
+        }
+        function startLocalOCR() { document.getElementById('ocrWarningModal').style.display = 'none'; document.getElementById('imageInput').click(); }
+
+        // 2. 裁剪与 OCR 核心逻辑
+        const imageInput = document.getElementById('imageInput');
+        const imagePreviewBox = document.getElementById('imagePreviewBox');
+        const imagePreview = document.getElementById('imagePreview');
+        const scanLine = document.getElementById('scanLine');
+        const ocrStatus = document.getElementById('ocrStatus');
+        const cropModal = document.getElementById('cropModal');
+        const imageToCrop = document.getElementById('imageToCrop');
+        let cropper = null; let ocrWorker = null; 
+
+        async function initOCR() {
+            try { ocrWorker = await Tesseract.createWorker('rus'); console.log("OCR 预加载完成"); } 
+            catch (e) { console.warn("OCR 预加载失败", e); }
+        }
+        initOCR(); 
+
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                imageToCrop.src = event.target.result;
+                cropModal.style.display = 'flex';
+                if (cropper) cropper.destroy();
+                cropper = new Cropper(imageToCrop, { viewMode: 1, dragMode: 'move', autoCropArea: 0.9, background: false });
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function cancelCrop() { cropModal.style.display = 'none'; if (cropper) cropper.destroy(); imageInput.value = ''; }
+
+        async function confirmCropAndOCR() {
+            if (!cropper) return;
+            const canvas = cropper.getCroppedCanvas({ maxWidth: 1200, maxHeight: 1200 });
+            cropModal.style.display = 'none';
+            if (cropper) cropper.destroy();
+
+            imagePreview.src = canvas.toDataURL('image/jpeg');
+            imagePreviewBox.style.display = 'block';
+            scanLine.style.display = 'block';
+            document.getElementById('analyzeBtn').disabled = true;
+
+            let isVisionModel = currentAPI === 'custom' && customApiKey && customApiUrl && !customApiUrl.includes('deepseek') && !customApiModel.includes('deepseek');
+
+            if (isVisionModel) {
+                ocrStatus.innerText = "⚡ 正在调用 AI 视觉大模型极速提取...";
+                try {
+                    const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+                    const prompt = `请提取图片中所有的俄语文本，保持原有换行格式。只输出纯文本，不要包含任何解释、代码块符号或额外的提示语。如果图片中没有文字，请返回空。`;
+                    
+                    const res = await fetch(customApiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${customApiKey}` },
+                        body: JSON.stringify({
+                            model: customApiModel || 'glm-4v',
+                            messages: [{
+                                role: 'user',
+                                content: [
+                                    { type: 'text', text: prompt },
+                                    { type: 'image_url', image_url: { url: base64Image } }
+                                ]
+                            }],
+                            temperature: 0.1
+                        })
+                    });
+
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    if (data.choices && data.choices[0] && data.choices[0].message) {
+                        let finalText = data.choices[0].message.content.trim();
+                        finalText = finalText.replace(/^```[a-zA-Z]*\n/, '').replace(/\n```$/, '');
+                        if (finalText.length === 0) {
+                            alert("AI 未在图中识别到文字。");
+                            ocrStatus.innerText = "❌ 未识别到文字";
+                        } else {
+                            document.getElementById('russianInput').value = finalText;
+                            ocrStatus.innerText = "✅ AI 极速提取成功！";
+                        }
+                        scanLine.style.display = 'none';
+                        document.getElementById('analyzeBtn').disabled = false;
+                        imageInput.value = '';
+                        return; 
+                    } else {
+                        throw new Error("大模型返回格式异常");
+                    }
+                } catch (err) {
+                    console.error("大模型视觉提取失败", err);
+                    alert("AI 提取失败，将自动降级使用本地慢速识别。\n报错原因：" + err.message);
+                }
+            }
+
+            ocrStatus.innerText = "⏳ 正在提取文字（本地识别较慢）...";
+            try {
+                if (!ocrWorker) { ocrStatus.innerText = "⏳ 正在启动 OCR 引擎..."; ocrWorker = await Tesseract.createWorker('rus'); }
+
+                canvas.toBlob(async (blob) => {
+                    try {
+                        const { data: { text } } = await ocrWorker.recognize(blob);
+                        let rawLines = text.split('\n');
+                        let cleanLines = rawLines.map(line => {
+                            let cleanLine = line.replace(/[^а-яА-ЯёЁa-zA-Z0-9\s\-.,?!«»]/g, '');
+                            return cleanLine.trim();
+                        }).filter(line => {
+                            const isSingleLetter = line.length === 1;
+                            const commonSingleLetters = ['я', 'в', 'и', 'а', 'с', 'к', 'у', 'о'];
+                            if (isSingleLetter && !commonSingleLetters.includes(line.toLowerCase())) return false;
+                            return line.length > 0;
+                        });
+
+                        let finalText = cleanLines.join('\n');
+                        if (finalText.length === 0) { alert("未能识别到有效俄文。"); ocrStatus.innerText = "❌ 未识别到文字"; } 
+                        else { document.getElementById('russianInput').value = finalText; ocrStatus.innerText = "✅ 本地提取成功！"; }
+                    } catch (err) { throw err; } 
+                    finally { scanLine.style.display = 'none'; document.getElementById('analyzeBtn').disabled = false; imageInput.value = ''; }
+                }, 'image/jpeg', 0.9);
+            } catch (err) {
+                console.error("OCR Error:", err); alert("引擎报错：" + err.message); ocrStatus.innerText = "❌ 识别出错";
+                if (ocrWorker) { await ocrWorker.terminate(); ocrWorker = null; }
+                scanLine.style.display = 'none'; document.getElementById('analyzeBtn').disabled = false; imageInput.value = ''; 
+            }
+        }
+
+        function fillExample() { document.getElementById('russianInput').value = "Безусловно. Вот простой русский текст на тему «Мое утро». \nКаждое утро я просыпаюсь в семь часов."; }
+
+        // 3. 主题与 API 设置
+        const themes = { 
+            classic: { '--paper-bg': '#f9f7f1', '--line-color': '#e0e0e0', '--blue-ink': '#1a3b8e', '--red-ink': '#c92a2a', '--text-color': '#333333', '--card-bg': '#fff8e1', '--card-border': '#ffe082', '--details-bg': 'rgba(255,255,255,0.8)', '--modal-bg': '#ffffff', '--input-bg': 'rgba(255,255,255,0.6)' }, 
+            dark: { '--paper-bg': '#1e1e1e', '--line-color': '#333333', '--blue-ink': '#f5c211', '--red-ink': '#ff6b6b', '--text-color': '#d4d4d4', '--card-bg': '#252525', '--card-border': '#444444', '--details-bg': 'rgba(255,255,255,0.05)', '--modal-bg': '#2d2d2d', '--input-bg': 'rgba(0,0,0,0.3)' }, 
+            forest: { '--paper-bg': '#e8f5e9', '--line-color': '#c8e6c9', '--blue-ink': '#1b5e20', '--red-ink': '#d84315', '--text-color': '#2e7d32', '--card-bg': '#f1f8e9', '--card-border': '#dcedc8', '--details-bg': 'rgba(255,255,255,0.6)', '--modal-bg': '#ffffff', '--input-bg': 'rgba(255,255,255,0.6)' }, 
+            cyber: { '--paper-bg': '#0f172a', '--line-color': '#1e293b', '--blue-ink': '#38bdf8', '--red-ink': '#f472b6', '--text-color': '#cbd5e1', '--card-bg': '#1e293b', '--card-border': '#334155', '--details-bg': 'rgba(255,255,255,0.05)', '--modal-bg': '#1e293b', '--input-bg': 'rgba(0,0,0,0.3)' } 
+        };
+        
+        function applyTheme(themeName) { 
+            const theme = themes[themeName]; if (!theme) return; 
+            for (let key in theme) document.documentElement.style.setProperty(key, theme[key]); 
+            document.querySelectorAll('.theme-card').forEach(el => el.classList.remove('active')); 
+            const active = document.querySelector(`.theme-card[data-theme="${themeName}"]`); if (active) active.classList.add('active'); 
+            localStorage.setItem('ruTheme', themeName); localStorage.removeItem('ruCustomBg'); localStorage.removeItem('ruCustomInk'); 
+            document.getElementById('customBg').value = theme['--paper-bg']; document.getElementById('customInk').value = theme['--blue-ink']; 
+        }
+        function applyCustomColor() { 
+            const bg = document.getElementById('customBg').value; const ink = document.getElementById('customInk').value; 
+            document.documentElement.style.setProperty('--paper-bg', bg); document.documentElement.style.setProperty('--blue-ink', ink); 
+            document.documentElement.style.setProperty('--card-bg', bg === '#ffffff' ? '#f5f5f5' : bg); 
+            document.querySelectorAll('.theme-card').forEach(el => el.classList.remove('active')); 
+            localStorage.setItem('ruCustomBg', bg); localStorage.setItem('ruCustomInk', ink); localStorage.removeItem('ruTheme'); 
+        }
+        const savedTheme = localStorage.getItem('ruTheme'); const savedBg = localStorage.getItem('ruCustomBg'); const savedInk = localStorage.getItem('ruCustomInk'); 
+        if (savedBg && savedInk) { document.getElementById('customBg').value = savedBg; document.getElementById('customInk').value = savedInk; applyCustomColor(); } 
+        else if (savedTheme && themes[savedTheme]) { applyTheme(savedTheme); } else { applyTheme('classic'); }
+
+        let currentAPI = localStorage.getItem('ruAPI') || 'auto';
+        let customApiUrl = localStorage.getItem('ruCustomApiUrl') || '';
+        let customApiKey = localStorage.getItem('ruCustomApiKey') || '';
+        let customApiModel = localStorage.getItem('ruCustomApiModel') || '';
+
+        document.querySelectorAll('input[name="apiSelect"]').forEach(radio => { if (radio.value === currentAPI) radio.checked = true; });
+        document.getElementById('customApiUrl').value = customApiUrl;
+        document.getElementById('customApiKey').value = customApiKey;
+        document.getElementById('customApiModel').value = customApiModel;
+
+        function toggleCustomApiUI() { const val = document.querySelector('input[name="apiSelect"]:checked').value; document.getElementById('customApiArea').style.display = val === 'custom' ? 'block' : 'none'; }
+        toggleCustomApiUI();
+
+        function saveAPISettings() { 
+            currentAPI = document.querySelector('input[name="apiSelect"]:checked').value; localStorage.setItem('ruAPI', currentAPI); 
+            customApiUrl = document.getElementById('customApiUrl').value.trim(); 
+            customApiKey = document.getElementById('customApiKey').value.trim(); 
+            customApiModel = document.getElementById('customApiModel').value.trim();
+            
+            if (currentAPI === 'custom' && !customApiModel) {
+                if (customApiUrl.includes('deepseek')) customApiModel = 'deepseek-chat';
+                else if (customApiUrl.includes('bigmodel')) customApiModel = 'glm-4v';
+            }
+            
+            document.getElementById('customApiModel').value = customApiModel;
+            localStorage.setItem('ruCustomApiUrl', customApiUrl); localStorage.setItem('ruCustomApiKey', customApiKey); localStorage.setItem('ruCustomApiModel', customApiModel);
+            document.getElementById('apiModal').style.display = 'none'; hideAlert(); 
+        }
+        
+        function openThemeSettings() { document.getElementById('themeModal').style.display = 'flex'; }
+        function openAPISettings() { document.getElementById('apiModal').style.display = 'flex'; }
+        document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', function(e) { if (e.target === this && this.id !== 'welcomeModal' && this.id !== 'cropModal' && this.id !== 'tutorialModal') this.style.display = 'none'; }));
+
+        // ==========================================
+        // 4. 翻译与解析逻辑
+        // ==========================================
+        const vocabDB = { "безусловно": { trans: "当然", phon: "比-祖-斯洛-夫-纳", parse: "副词。" }, "вот": { trans: "这就是", phon: "沃特", parse: "指示词。" }, "простой": { trans: "简单的", phon: "普拉-斯托伊", parse: "形容词。" }, "русский": { trans: "俄罗斯的", phon: "鲁-斯基", parse: "形容词。" }, "текст": { trans: "文本", phon: "捷克斯特", parse: "名词。" }, "на": { trans: "关于", phon: "纳", parse: "前置词。" }, "тему": { trans: "主题", phon: "杰-姆", parse: "名词。" }, "мое": { trans: "我的", phon: "马-约", parse: "代词。" }, "утро": { trans: "早晨", phon: "乌-特拉", parse: "名词。" }, "каждое": { trans: "每一个", phon: "卡日-达耶", parse: "代词。" }, "я": { trans: "我", phon: "亚", parse: "代词。" }, "просыпаюсь": { trans: "醒来", phon: "普拉-瑟-帕-尤斯", parse: "动词。" }, "в": { trans: "在", phon: "夫", parse: "前置词。" }, "семь": { trans: "七", phon: "谢姆", parse: "数词。" }, "часов": { trans: "点钟", phon: "恰-索夫", parse: "名词。" } };
+        const stressDict = { "безусловно": "безуслóвно", "простой": "просто́й", "русский": "ру́сский", "текст": "текст", "тему": "те́му", "мое": "моё", "утро": "у́тро", "каждое": "ка́ждое", "просыпаюсь": "просыпа́юсь", "часов": "часо́в" };
+        const letterMap = { 'а': '阿', 'б': '布', 'в': '夫', 'г': '戈', 'д': '德', 'е': '耶', 'ё': '哟', 'ж': '日', 'з': '兹', 'и': '伊', 'й': '伊', 'к': '克', 'л': '勒', 'м': '姆', 'н': '恩', 'о': '奥', 'п': '普', 'р': '尔', 'с': '斯', 'т': '特', 'у': '乌', 'ф': '夫', 'х': '赫', 'ц': '茨', 'ч': '奇', 'ш': '什', 'щ': '希', 'ъ': '', 'ы': '厄', 'ь': '', 'э': '埃', 'ю': '尤', 'я': '亚' };
+        
+        function engine(word) { 
+            let w = word.toLowerCase().replace(/[.,?!«»:;()]/g, ''); 
+            let result = { transliteration: "", breakdown: [] }; 
+            let hasStressAtLast = ['молоко', 'москва'].includes(w); 
+            let resStr = ""; 
+            let letters = w.split(''); 
+            
+            if (w === 'что') return { transliteration: '什托', breakdown: ["<span class='highlight-red'>【特殊读音】чт 读作 шт</span>"] };
+            if (w === 'его' || w === 'ого') return { transliteration: '耶沃', breakdown: ["<span class='highlight-red'>【特殊读音】г 读作 в</span>"] };
+            
+            const combos = { 'ви': '维', 'зи': '兹', 'ка': '卡', 'су': '苏', 'ши': '希' };
+            for (let i = 0; i < letters.length; i++) { 
+                let char = letters[i]; let nextChar = letters[i+1] || ''; let combo = char + nextChar;
+                if (combos[combo]) { resStr += combos[combo]; i++; continue; }
+                let hanzi = letterMap[char] || ''; if (char === '-') { hanzi = '-'; }
+                if (i === letters.length - 1 && char === 'д') { hanzi = '特'; result.breakdown.push("<span class='highlight-red'>【清化】词尾 д 读作 т</span>"); } 
+                if (char === 'о' && !hasStressAtLast) { hanzi = '阿'; if (i !== 0 && !result.breakdown.some(b => b.includes('о 弱化'))) result.breakdown.push("<span class='highlight-red'>【弱化】非重读 о 读作 а</span>"); } 
+                if (['т', 'д', 'с', 'з', 'н', 'л'].includes(char) && ['ь', 'е', 'ё', 'ю', 'я', 'и'].includes(nextChar)) { if (char === 'т') hanzi = '季'; if (char === 'д') hanzi = '吉'; if (char === 'с') hanzi = '西'; } 
+                if (char === 'с' && nextChar === 'т') { hanzi = '斯特'; i++; } 
+                if (char === 'т' && nextChar === 'ь' && letters[i+2] === 'с' && letters[i+3] === 'я') { hanzi = '察'; i+=3; }
+                resStr += hanzi; 
+            } 
+            result.transliteration = resStr; return result; 
+        }
+
+        let isLimitReached = false;
+        function showAlert(msg, isDanger = false) { const el = document.getElementById('apiAlert'); el.innerHTML = `⚠️ <b>接口提示：</b><br>${msg}`; el.style.display = 'block'; if (isDanger) el.classList.add('danger'); else el.classList.remove('danger'); }
+        function hideAlert() { document.getElementById('apiAlert').style.display = 'none'; }
+        function fetchWithTimeout(resource, options = {}) { const { timeout = 10000 } = options; return Promise.race([ fetch(resource, options), new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout)) ]); }
+        const translationCache = new Map();
+
+        async function fetchTranslation(text, isZhToRu) {
+            if (!text.trim()) return "";
+            const cacheKey = (isZhToRu ? 'zh-ru:' : 'ru-zh:') + text;
+            if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
+            let result = null;
+            if (currentAPI === 'custom') {
+                if (!customApiUrl || !customApiKey) { showAlert("请先在右上角齿轮中配置自定义 API 地址和 Key。", true); return null; }
+                try {
+                    const prompt = `请将以下文本翻译成${isZhToRu ? '俄语' : '中文'}。只输出翻译结果，不要包含任何解释：\n\n${text}`;
+                    const res = await fetchWithTimeout(customApiUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${customApiKey}` },
+                        body: JSON.stringify({ model: customApiModel || 'gpt-3.5-turbo', messages: [{ role: 'user', content: prompt }], temperature: 0.1 })
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    if (data.choices && data.choices[0] && data.choices[0].message) { 
+                        result = data.choices[0].message.content.trim(); 
+                        if (result) { translationCache.set(cacheKey, result); return result; }
+                    }
+                } catch (e) { 
+                    console.error("自定义 API 请求失败", e); 
+                    showAlert("自定义 API 请求失败，已自动降级使用免费接口。", true); 
+                }
+            }
+
+            const from = isZhToRu ? 'zh-CN' : 'ru'; const to = isZhToRu ? 'ru' : 'zh-CN';
+            let apisToTry = (currentAPI === 'auto' || currentAPI === 'custom') ? ['google', 'lingva', 'mymemory'] : [currentAPI, 'google', 'mymemory'];
+            
+            for (let api of apisToTry) {
+                try {
+                    if (api === 'google') { const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`; const res = await fetchWithTimeout(url, { timeout: 3000 }); if (!res.ok) throw new Error("Network error"); const data = await res.json(); if (data && data[0] && data[0][0] && data[0][0][0]) result = data[0][0][0]; } 
+                    else if (api === 'lingva') { const url = `https://lingva.ml/api/v1/${isZhToRu ? 'zh' : 'ru'}/${isZhToRu ? 'ru' : 'zh'}/${encodeURIComponent(text)}`; const res = await fetchWithTimeout(url, { timeout: 3000 }); if (!res.ok) throw new Error("Network error"); const data = await res.json(); if (data && data.translation) result = data.translation; } 
+                    else if (api === 'mymemory') { const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`; const res = await fetchWithTimeout(url, { timeout: 3000 }); if (!res.ok) throw new Error("Network error"); const data = await res.json(); if (data && data.responseData && data.responseData.translatedText) { result = data.responseData.translatedText; if (result.includes("MYMEMORY WARNING")) throw new Error("Limit reached"); } }
+                    if (result) break;
+                } catch (e) { console.warn(`通道 ${api} 失败`, e); }
+            }
+            
+            if (result) { translationCache.set(cacheKey, result); return result; }
+            showAlert("所有翻译通道均请求失败，请检查网络或切换接口。", true);
+            return null;
+        }
+
+        const russianInput = document.getElementById('russianInput'); const analyzeBtn = document.getElementById('analyzeBtn'); const resultBox = document.getElementById('resultBox');
+        function clearInput() { russianInput.value = ""; resultBox.innerHTML = ""; imagePreviewBox.style.display = "none"; stopAllAudio(); hideAlert(); }
+
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const old = btn.innerHTML;
+                btn.innerHTML = '✅';
+                setTimeout(() => btn.innerHTML = old, 1500);
+            });
+        }
+
+        async function queueTasks(tasks, limit = 3) {
+            const results = []; const executing = [];
+            for (const task of tasks) {
+                const p = Promise.resolve().then(() => task());
+                results.push(p);
+                if (limit <= tasks.length) {
+                    const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+                    executing.push(e);
+                    if (executing.length >= limit) await Promise.race(executing);
+                }
+            }
+            return Promise.all(results);
+        }
+
+        async function startAnalysis() {
+            let input = russianInput.value.trim(); if (!input) return;
+            stopAllAudio(); isLimitReached = false; hideAlert(); analyzeBtn.disabled = true; analyzeBtn.innerHTML = "解析中..."; resultBox.innerHTML = `<div style="text-align:center; color:var(--blue-ink);">正在处理文本...</div>`;
+            
+            const hasChinese = /[\u4e00-\u9fa5]/.test(input);
+            if (hasChinese) { const ruText = await fetchTranslation(input, true); if (!ruText) { resultBox.innerHTML = `<div style="color:var(--red-ink); text-align:center;">翻译失败，请尝试点击右上角切换接口。</div>`; analyzeBtn.disabled = false; analyzeBtn.innerHTML = "开始解析"; return; } input = ruText; russianInput.value = input; }
+
+            let rawWords = input.match(/[а-яА-ЯёЁ\-]+/g) || []; 
+            const commonSingleLetters = ['я', 'в', 'и', 'а', 'с', 'к', 'у', 'о'];
+            let words = rawWords.filter(w => { if (w.length === 1) return commonSingleLetters.includes(w.toLowerCase()); return true; });
+            if (words.length === 0) { alert("未检测到有效俄语单词！"); analyzeBtn.disabled = false; analyzeBtn.innerHTML = "开始解析"; return; }
+
+            const isTooLong = words.length > 150;
+            if (isTooLong) {
+                resultBox.innerHTML = `<div style="color:var(--red-ink); text-align:center; padding: 20px; line-height: 1.6;">⚠️ <b>文本过长（超过 150 个单词）。</b><br><br>为了避免免费接口卡死，系统将<b>只解析前 150 个词</b>。<br>建议您分段复制。</div>`;
+                words = words.slice(0, 150);
+                input = words.join(" "); 
+            }
+            
+            let cardsHTML = ""; let fetchTasks = [];
+
+            for (let i = 0; i < words.length; i++) {
+                const w = words[i]; const lowerW = w.toLowerCase(); 
+                let displayWord = stressDict[lowerW] ? stressDict[lowerW] : w; 
+                let phonetics = vocabDB[lowerW] ? { transliteration: vocabDB[lowerW].phon } : engine(w); 
+                let parseHTML = vocabDB[lowerW] ? `<span class='highlight-blue'>${vocabDB[lowerW].parse}</span>` : phonetics.breakdown.map(item => `<div>• ${item}</div>`).join('') || "<span class='highlight-blue'>【常规拼读】</span>";
+                
+                let transText = "";
+                if (vocabDB[lowerW]) { transText = vocabDB[lowerW].trans; } 
+                else if (translationCache.has('ru-zh:' + w)) { transText = translationCache.get('ru-zh:' + w); } 
+                else { transText = `<span class='loading-dots'>翻译中</span>`; fetchTasks.push({ word: w, index: i }); }
+
+                cardsHTML += `
+                <details id="card-${i}">
+                    <summary><span>${displayWord}</span><button class="speak-btn" data-text="${w}" onclick="event.preventDefault(); event.stopPropagation(); playText(this.dataset.text, this)">🔊</button></summary>
+                    <div class="details-content">
+                        <div class="translation" id="trans-${i}">翻译：${transText}</div>
+                        <div class="phonetic">【中文音译】 ${phonetics.transliteration}</div>
+                        <div class="details-text"><b>💡 解析：</b><br>${parseHTML}</div>
+                    </div>
+                </details>`;
+            }
+
+            resultBox.innerHTML = `
+                <div class="sentence-card">
+                    <div class="sentence-header"><span>📝 双语对照翻译</span><span class="loading-dots" id="sentenceLoading" style="font-size:14px;">翻译中</span></div>
+                    <div id="sentencePairs"></div>
+                    <div class="sentence-actions">
+                        <div id="fullTextHidden" style="display:none;">${input}</div>
+                        <button class="action-btn" onclick="playText(document.getElementById('fullTextHidden').innerText, this)">🔊 播放全段</button>
+                    </div>
+                </div>
+                <div style="font-size:14px; color:var(--text-color); opacity:0.7; margin-bottom:10px;">👇 点击单词展开详细拆解</div>
+                ${cardsHTML}`;
+            analyzeBtn.disabled = false; analyzeBtn.innerHTML = "开始解析";
+            
+            translateAndRenderPairs(input);
+
+            const maxFetch = 30; 
+            const tasksToRun = fetchTasks.slice(0, maxFetch).map(task => {
+                return async () => {
+                    const trans = await fetchTranslation(task.word, false);
+                    const el = document.getElementById(`trans-${task.index}`);
+                    if (el) el.innerText = `翻译：${trans || (isLimitReached ? "（接口受限）" : "无结果")}`;
+                };
+            });
+            fetchTasks.slice(maxFetch).forEach(task => { const el = document.getElementById(`trans-${task.index}`); if (el) el.innerText = `翻译：（生词过多，已暂停）`; });
+            queueTasks(tasksToRun, 3); 
+        }
+
+        async function translateAndRenderPairs(text) {
+            const container = document.getElementById('sentencePairs'); 
+            let chunks = [];
+            if (text.includes('\n')) { chunks = text.split('\n').map(s => s.trim()).filter(s => s.length > 0); } 
+            else {
+                const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+                let currentChunk = "";
+                for (let s of sentences) { s = s.trim(); if (!s) continue; if ((currentChunk + s).length > 150) { if (currentChunk) chunks.push(currentChunk); currentChunk = s; } else { currentChunk += (currentChunk ? " " : "") + s; } } 
+                if (currentChunk) chunks.push(currentChunk);
+            }
+            
+            container.innerHTML = "";
+            for (let i = 0; i < chunks.length; i++) { container.innerHTML += `<div class="pair-item"><div class="pair-ru-row"><div class="pair-ru">${chunks[i]}</div><button class="pair-speak-btn" onclick="playText(this.parentElement.querySelector('.pair-ru').innerText, this)">▶</button></div><div class="pair-zh" id="pair-zh-container-${i}"><span class="loading-dots" id="pair-zh-${i}">翻译中</span></div></div>`; }
+
+            for (let i = 0; i < chunks.length; i++) { 
+                if (isLimitReached) { document.getElementById(`pair-zh-${i}`).innerHTML = "<span style='color:var(--red-ink)'>（额度耗尽）</span>"; document.getElementById(`pair-zh-${i}`).classList.remove('loading-dots'); continue; } 
+                let res = await fetchTranslation(chunks[i], false); 
+                const targetEl = document.getElementById(`pair-zh-container-${i}`); 
+                if (targetEl) { 
+                    targetEl.innerHTML = `<span>${res || "翻译失败"}</span><button class="copy-btn" title="复制译文" onclick="copyText('${res || ""}', this)">📋</button>`;
+                } 
+                if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 200)); 
+            }
+            document.getElementById('sentenceLoading').style.display = 'none';
+        }
+
+        const audioPlayer = document.getElementById('audioPlayer');
+        let activeBtn = null; let originalBtnText = "";
+        function stopAllAudio() { audioPlayer.pause(); audioPlayer.src = ""; if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); } if (activeBtn) { activeBtn.innerHTML = originalBtnText; activeBtn.disabled = false; activeBtn = null; } }
+
+        function playText(text, btn) {
+            stopAllAudio(); activeBtn = btn; originalBtnText = btn.innerHTML;
+            if (btn.classList.contains('pair-speak-btn')) btn.innerHTML = "⏳"; else btn.innerHTML = "⌛";
+            btn.disabled = true;
+            let cleanText = text.replace(/[^а-яА-ЯёЁa-zA-Z0-9\s\-]/g, '').trim();
+            let googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=ru&client=tw-ob`;
+            audioPlayer.src = googleUrl;
+            audioPlayer.onended = () => { if (btn) { btn.innerHTML = originalBtnText; btn.disabled = false; } };
+            audioPlayer.onerror = () => { audioPlayer.src = `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cleanText)}&le=ru`; audioPlayer.play().catch(() => fallbackToLocalTTS(cleanText, btn)); };
+            audioPlayer.play().catch((err) => { fallbackToLocalTTS(cleanText, btn); });
+            setTimeout(() => { if (btn && btn.disabled) { btn.innerHTML = originalBtnText; btn.disabled = false; } }, 5000);
+        }
+
+        function fallbackToLocalTTS(text, btn) {
+            if (!('speechSynthesis' in window)) { alert("❌ 您的浏览器不支持语音朗读。"); if (btn) { btn.innerHTML = originalBtnText; btn.disabled = false; } return; }
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ru-RU'; utterance.rate = 0.9;
+            const voices = window.speechSynthesis.getVoices();
+            const ruVoice = voices.find(v => v.lang.includes('ru'));
+            if (ruVoice) utterance.voice = ruVoice;
+            utterance.onend = utterance.onerror = () => { if (btn) { btn.innerHTML = originalBtnText; btn.disabled = false; } };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        russianInput.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startAnalysis();
+            else if (e.key === 'Escape') clearInput();
+        });
+    </script>
+</body>
+</html>
